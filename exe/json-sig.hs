@@ -12,7 +12,10 @@ main = do
   bstr <- LB.readFile (args !! 0)
   case (eitherDecode bstr :: Either String ObjectMap) of
     Left str -> putStrLn str
-    Right o -> putStrLn (prettyPrint o) -- (makeObjs o)
+    Right o -> writeFile (args !! 1) (prettyPrint o)
+
+
+    -- (makeObjs o)
 
 {-
     (ObjectMap omap) -> do
