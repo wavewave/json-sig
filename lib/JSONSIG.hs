@@ -139,8 +139,9 @@ makeObjs (ObjectMap omap) = fmap makeObjDecl lst
   where lst = HM.toList omap
 
 createModule :: ObjectMap -> Module
-createModule o = Module src (ModuleName "Signature") [] Nothing Nothing [] decls
-  where decls = makeObjs o
+createModule o = Module src (ModuleName "Signature") [] Nothing Nothing imports decls
+  where imports = [ ImportDecl src (ModuleName "Android.Bridge.Type") False False False Nothing Nothing Nothing ]
+        decls = makeObjs o
 
 
 style = PP.Style PP.PageMode 132 0.6
