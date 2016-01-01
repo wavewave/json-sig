@@ -139,7 +139,7 @@ makeObjs (ObjectMap omap) = fmap makeObjDecl lst
   where lst = HM.toList omap
 
 createModule :: ObjectMap -> Module
-createModule o = Module src (ModuleName "Test") [] Nothing Nothing [] decls
+createModule o = Module src (ModuleName "Signature") [] Nothing Nothing [] decls
   where decls = makeObjs o
 
 
