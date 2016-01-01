@@ -1,0 +1,37 @@
+name: json-sig
+version: 0.0
+synopsis: 
+description: 
+license: MIT
+license-file: LICENSE
+author: Ian-Woo Kim
+maintainer: Ian-Woo Kim<ianwookim@gmail.com>
+build-type: Simple
+cabal-version: >=1.8
+
+
+library
+  hs-source-dirs: lib
+  build-depends:  base,
+                  aeson,
+                  -- attoparsec,
+                  bytestring,
+                  haskell-src-exts,
+                  split,
+                  text,
+                  unordered-containers,
+                  vector
+  ghc-options:      -debug -fPIC -threaded
+  exposed-modules:  JSONSIG            
+                    -- Com.Uphere.Vchatter
+                    
+executable json-sig
+  hs-source-dirs: exe
+  main-is: json-sig.hs
+  ghc-options:      -debug -fPIC -threaded
+  build-depends: base,
+                 aeson,
+                 bytestring,
+                 text,
+                 unordered-containers,
+                 json-sig
