@@ -124,24 +124,41 @@ makePrim :: SigPrim -> Type
 makePrim SPInt = TyCon (local "PInt")
 makePrim SPByte = TyCon (local "PByte")
 
-makeMethod objname (mtd,args) = QualConDecl src [] [] (ConDecl mtdident typs)
+tapp = TyApp
+
+tcon = TyCon . UnQual . Ident
+
+promoInt = TyPromoted . PromotedInteger
+
+promoList = TyPromoted . PromotedList True
+
+promoCon = PromotedCon False . UnQual . Ident
+           
+makeMethod objname (mtd,args) = TypeDecl src mtdident [] typ
   where mtdname =  haskMethodName objname (T.unpack mtd)
         mtdident = Ident mtdname
         arglist = (F.toList . method_args) args
-        typs = fmap makeArg arglist
+        argtyps = fmap makeArg arglist
+        typ = (tcon "Sig") `tapp` (promoInt 0) `tapp` (promoInt 1) `tapp` (promoList argtyps)
 
-makeObjDecl (txt,ms) = DataDecl src DataType [] objident [] values []
+
+makeObjDecl (txt,ms) = declObj : declMethods
   where objname = (haskObjName . T.unpack) txt
         objident = Ident objname
-        values = (fmap (makeMethod objname) . HM.toList . map_method) ms
+        declObj = DataDecl src DataType [] objident [] [] []
+        mths = (HM.toList . map_method) ms
+        declMethods = fmap (makeMethod objname) mths
 
-makeObjs (ObjectMap omap) = fmap makeObjDecl lst
+makeObjs (ObjectMap omap) = F.concatMap makeObjDecl lst
   where lst = HM.toList omap
 
 createModule :: ObjectMap -> Module
-createModule o = Module src (ModuleName "Signature") [] Nothing Nothing imports decls
-  where imports = [ ImportDecl src (ModuleName "Android.Bridge.Type") False False False Nothing Nothing Nothing ]
-        decls = makeObjs o
+createModule o = Module src (ModuleName "Signature") pragmas Nothing Nothing imports decls
+  where
+    pragmas = [ LanguagePragma src (fmap Ident [ "DataKinds", "EmptyDataDecls", "GADTs", "KindSignatures", "TypeOperators" ]) ]
+    imports = [ ImportDecl src (ModuleName "GHC.TypeLits") False False False Nothing Nothing Nothing
+              , ImportDecl src (ModuleName "Android.Bridge.Type") False False False Nothing Nothing Nothing ]
+    decls = makeObjs o
 
 
 style = PP.Style PP.PageMode 132 0.6
