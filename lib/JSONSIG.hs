@@ -7,7 +7,6 @@ module JSONSIG where
 import           Data.Aeson hiding (String)
 import qualified Data.Aeson as Aeson (Value(String))
 import           Data.Aeson.Types (typeMismatch,Parser)
--- import qualified Data.Attoparsec as A
 import qualified Data.ByteString.Char8 as B
 import           Data.Char (toLower,toUpper)
 import qualified Data.Foldable as F
@@ -20,8 +19,6 @@ import           Data.Vector as V hiding ((++))
 import           Language.Haskell.Exts.Syntax
 import qualified Language.Haskell.Exts.Pretty as PP
 
--- parseSig :: B.ByteString -> A.Result Value
--- parseSig str = A.parse json str 
 
 type ObjectName = T.Text
 type MethodName = T.Text

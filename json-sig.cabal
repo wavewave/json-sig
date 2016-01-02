@@ -14,7 +14,6 @@ library
   hs-source-dirs: lib
   build-depends:  base,
                   aeson,
-                  attoparsec,
                   bytestring,
                   haskell-src-exts,
                   split,
@@ -23,7 +22,6 @@ library
                   vector
   ghc-options:      -debug -fPIC -threaded
   exposed-modules:  JSONSIG            
-                    -- Com.Uphere.Vchatter
                     
 executable json-sig
   hs-source-dirs: exe
@@ -31,7 +29,6 @@ executable json-sig
   ghc-options:      -debug -fPIC -threaded
   build-depends: base,
                  aeson,
-                 attoparsec,
                  bytestring,
                  text,
                  unordered-containers,
