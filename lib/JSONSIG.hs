@@ -1,10 +1,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module JSONSIG where
 
 import           Data.Aeson hiding (String)
 import qualified Data.Aeson as Aeson (Value(String))
-import           Data.Aeson.Types (typeMismatch)
+import           Data.Aeson.Types (typeMismatch,Parser)
 -- import qualified Data.Attoparsec as A
 import qualified Data.ByteString.Char8 as B
 import           Data.Char (toLower,toUpper)
@@ -14,7 +16,7 @@ import           Data.List (intersperse)
 import           Data.List.Split (splitOn)
 import qualified Data.Text as T
 import qualified Data.Traversable as Tr
-import           Data.Vector hiding ((++))
+import           Data.Vector as V hiding ((++))
 import           Language.Haskell.Exts.Syntax
 import qualified Language.Haskell.Exts.Pretty as PP
 
@@ -24,14 +26,15 @@ import qualified Language.Haskell.Exts.Pretty as PP
 type ObjectName = T.Text
 type MethodName = T.Text
 
-newtype ObjectMap = ObjectMap { map_object :: HM.HashMap ObjectName MethodMap }
+newtype ObjectMap = ObjectMap { list_object :: Vector (ObjectName,MethodMap) }
+                  deriving (Show)
+ 
+newtype MethodMap = MethodMap { list_method :: Vector (MethodName,MethodSig) }
                   deriving (Show)
 
-newtype MethodMap = MethodMap { map_method :: HM.HashMap MethodName MethodSig }
+newtype MethodSig = MethodSig { list_args :: Vector SigArg }
                   deriving (Show)
 
-newtype MethodSig = MethodSig { method_args :: Vector SigArg }
-                  deriving (Show)
 
 data SigPrim = SPInt
              | SPByte
@@ -45,16 +48,23 @@ data SigArg = SAPrim SigPrim
 
 
 instance FromJSON ObjectMap where
-  parseJSON (Object v) = do
-    v' <- Tr.mapM parseJSON v
-    return (ObjectMap v')
-  parseJSON invalid = typeMismatch "ObjectMap: not object" invalid
+  parseJSON (Array vs) = do
+    let f (Object v) = do ms <- parseJSON =<< (v .: "methods")
+                          (,) <$> v .: "name" <*> pure ms
+        f inv = typeMismatch "ObjectMap: not object" inv
+    vs' <- Tr.mapM f vs 
+    return (ObjectMap vs')
+  parseJSON invalid = typeMismatch "ObjectMap: not array" invalid
 
+ 
 instance FromJSON MethodMap where
-  parseJSON (Object v) = do
-    v' <- Tr.mapM parseJSON v
-    return (MethodMap v')
-  parseJSON invalid = typeMismatch "MethodMap: not object" invalid
+  parseJSON (Array vs) = do
+    let f (Object v) = do as <- parseJSON =<< (v .: "args")
+                          (,) <$> v .: "name" <*> pure as
+        f inv = typeMismatch "MethodMap: not object" inv
+    vs' <- Tr.mapM f vs 
+    return (MethodMap vs')
+  parseJSON invalid = typeMismatch "MethodMap: not array" invalid
 
 instance FromJSON MethodSig where
   parseJSON (Array vs) = do
@@ -134,23 +144,23 @@ promoList = TyPromoted . PromotedList True
 
 promoCon = PromotedCon False . UnQual . Ident
            
-makeMethod objname (mtd,args) = TypeDecl src mtdident [] typ
+makeMethod objname o (m,(mtd,args)) = TypeDecl src mtdident [] typ
   where mtdname =  haskMethodName objname (T.unpack mtd)
         mtdident = Ident mtdname
-        arglist = (F.toList . method_args) args
+        arglist = (V.toList . list_args) args
         argtyps = fmap makeArg arglist
-        typ = (tcon "Sig") `tapp` (promoInt 0) `tapp` (promoInt 1) `tapp` (promoList argtyps)
+        typ = (tcon "Sig") `tapp` (promoInt o) `tapp` (promoInt m) `tapp` (promoList argtyps)
 
 
-makeObjDecl (txt,ms) = declObj : declMethods
+makeObjDecl (o,(txt,ms)) = declObj : declMethods
   where objname = (haskObjName . T.unpack) txt
         objident = Ident objname
         declObj = DataDecl src DataType [] objident [] [] []
-        mths = (HM.toList . map_method) ms
-        declMethods = fmap (makeMethod objname) mths
+        mths = (Prelude.zip [0..] . V.toList . list_method) ms
+        declMethods = fmap (makeMethod objname o) mths
 
 makeObjs (ObjectMap omap) = F.concatMap makeObjDecl lst
-  where lst = HM.toList omap
+  where lst = (Prelude.zip [0..] . V.toList) omap
 
 createModule :: ObjectMap -> Module
 createModule o = Module src (ModuleName "Signature") pragmas Nothing Nothing imports decls
@@ -167,3 +177,4 @@ myMode :: PP.PPHsMode
 myMode = PP.PPHsMode 2 2 2 2 2 4 1 True PP.PPOffsideRule False 
 
 prettyPrint o = PP.prettyPrintStyleMode style myMode (createModule o)
+

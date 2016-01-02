@@ -14,7 +14,7 @@ library
   hs-source-dirs: lib
   build-depends:  base,
                   aeson,
-                  -- attoparsec,
+                  attoparsec,
                   bytestring,
                   haskell-src-exts,
                   split,
@@ -31,6 +31,7 @@ executable json-sig
   ghc-options:      -debug -fPIC -threaded
   build-depends: base,
                  aeson,
+                 attoparsec,
                  bytestring,
                  text,
                  unordered-containers,
