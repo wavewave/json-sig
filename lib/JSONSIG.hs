@@ -1,11 +1,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module JSONSIG where
 
 import           Data.Aeson hiding (String)
 import qualified Data.Aeson as Aeson (Value(String))
-import           Data.Aeson.Types (typeMismatch)
--- import qualified Data.Attoparsec as A
+import           Data.Aeson.Types (typeMismatch,Parser)
 import qualified Data.ByteString.Char8 as B
 import           Data.Char (toLower,toUpper)
 import qualified Data.Foldable as F
@@ -14,24 +15,23 @@ import           Data.List (intersperse)
 import           Data.List.Split (splitOn)
 import qualified Data.Text as T
 import qualified Data.Traversable as Tr
-import           Data.Vector hiding ((++))
+import           Data.Vector as V hiding ((++))
 import           Language.Haskell.Exts.Syntax
 import qualified Language.Haskell.Exts.Pretty as PP
 
--- parseSig :: B.ByteString -> A.Result Value
--- parseSig str = A.parse json str 
 
 type ObjectName = T.Text
 type MethodName = T.Text
 
-newtype ObjectMap = ObjectMap { map_object :: HM.HashMap ObjectName MethodMap }
+newtype ObjectMap = ObjectMap { list_object :: Vector (ObjectName,MethodMap) }
+                  deriving (Show)
+ 
+newtype MethodMap = MethodMap { list_method :: Vector (MethodName,MethodSig) }
                   deriving (Show)
 
-newtype MethodMap = MethodMap { map_method :: HM.HashMap MethodName MethodSig }
+newtype MethodSig = MethodSig { list_args :: Vector SigArg }
                   deriving (Show)
 
-newtype MethodSig = MethodSig { method_args :: Vector SigArg }
-                  deriving (Show)
 
 data SigPrim = SPInt
              | SPByte
@@ -45,16 +45,23 @@ data SigArg = SAPrim SigPrim
 
 
 instance FromJSON ObjectMap where
-  parseJSON (Object v) = do
-    v' <- Tr.mapM parseJSON v
-    return (ObjectMap v')
-  parseJSON invalid = typeMismatch "ObjectMap: not object" invalid
+  parseJSON (Array vs) = do
+    let f (Object v) = do ms <- parseJSON =<< (v .: "methods")
+                          (,) <$> v .: "name" <*> pure ms
+        f inv = typeMismatch "ObjectMap: not object" inv
+    vs' <- Tr.mapM f vs 
+    return (ObjectMap vs')
+  parseJSON invalid = typeMismatch "ObjectMap: not array" invalid
 
+ 
 instance FromJSON MethodMap where
-  parseJSON (Object v) = do
-    v' <- Tr.mapM parseJSON v
-    return (MethodMap v')
-  parseJSON invalid = typeMismatch "MethodMap: not object" invalid
+  parseJSON (Array vs) = do
+    let f (Object v) = do as <- parseJSON =<< (v .: "args")
+                          (,) <$> v .: "name" <*> pure as
+        f inv = typeMismatch "MethodMap: not object" inv
+    vs' <- Tr.mapM f vs 
+    return (MethodMap vs')
+  parseJSON invalid = typeMismatch "MethodMap: not array" invalid
 
 instance FromJSON MethodSig where
   parseJSON (Array vs) = do
@@ -124,24 +131,41 @@ makePrim :: SigPrim -> Type
 makePrim SPInt = TyCon (local "PInt")
 makePrim SPByte = TyCon (local "PByte")
 
-makeMethod objname (mtd,args) = QualConDecl src [] [] (ConDecl mtdident typs)
+tapp = TyApp
+
+tcon = TyCon . UnQual . Ident
+
+promoInt = TyPromoted . PromotedInteger
+
+promoList = TyPromoted . PromotedList True
+
+promoCon = PromotedCon False . UnQual . Ident
+           
+makeMethod objname o (m,(mtd,args)) = TypeDecl src mtdident [] typ
   where mtdname =  haskMethodName objname (T.unpack mtd)
         mtdident = Ident mtdname
-        arglist = (F.toList . method_args) args
-        typs = fmap makeArg arglist
+        arglist = (V.toList . list_args) args
+        argtyps = fmap makeArg arglist
+        typ = (tcon "Sig") `tapp` (promoInt o) `tapp` (promoInt m) `tapp` (promoList argtyps)
 
-makeObjDecl (txt,ms) = DataDecl src DataType [] objident [] values []
+
+makeObjDecl (o,(txt,ms)) = declObj : declMethods
   where objname = (haskObjName . T.unpack) txt
         objident = Ident objname
-        values = (fmap (makeMethod objname) . HM.toList . map_method) ms
+        declObj = DataDecl src DataType [] objident [] [] []
+        mths = (Prelude.zip [0..] . V.toList . list_method) ms
+        declMethods = fmap (makeMethod objname o) mths
 
-makeObjs (ObjectMap omap) = fmap makeObjDecl lst
-  where lst = HM.toList omap
+makeObjs (ObjectMap omap) = F.concatMap makeObjDecl lst
+  where lst = (Prelude.zip [0..] . V.toList) omap
 
 createModule :: ObjectMap -> Module
-createModule o = Module src (ModuleName "Signature") [] Nothing Nothing imports decls
-  where imports = [ ImportDecl src (ModuleName "Android.Bridge.Type") False False False Nothing Nothing Nothing ]
-        decls = makeObjs o
+createModule o = Module src (ModuleName "Signature") pragmas Nothing Nothing imports decls
+  where
+    pragmas = [ LanguagePragma src (fmap Ident [ "DataKinds", "EmptyDataDecls", "GADTs", "KindSignatures", "TypeOperators" ]) ]
+    imports = [ ImportDecl src (ModuleName "GHC.TypeLits") False False False Nothing Nothing Nothing
+              , ImportDecl src (ModuleName "Android.Bridge.Type") False False False Nothing Nothing Nothing ]
+    decls = makeObjs o
 
 
 style = PP.Style PP.PageMode 132 0.6
@@ -150,3 +174,4 @@ myMode :: PP.PPHsMode
 myMode = PP.PPHsMode 2 2 2 2 2 4 1 True PP.PPOffsideRule False 
 
 prettyPrint o = PP.prettyPrintStyleMode style myMode (createModule o)
+
