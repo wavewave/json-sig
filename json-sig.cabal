@@ -30,6 +30,8 @@ executable json-sig
   build-depends: base,
                  aeson,
                  bytestring,
+                 filepath,
+                 haskell-src-exts,
                  text,
                  unordered-containers,
                  json-sig

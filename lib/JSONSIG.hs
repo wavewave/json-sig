@@ -159,8 +159,8 @@ makeObjDecl (o,(txt,ms)) = declObj : declMethods
 makeObjs (ObjectMap omap) = F.concatMap makeObjDecl lst
   where lst = (Prelude.zip [0..] . V.toList) omap
 
-createModule :: ObjectMap -> Module
-createModule o = Module src (ModuleName "Signature") pragmas Nothing Nothing imports decls
+createModule :: ModuleName -> ObjectMap -> Module
+createModule mod o = Module src mod pragmas Nothing Nothing imports decls
   where
     pragmas = [ LanguagePragma src (fmap Ident [ "DataKinds", "EmptyDataDecls", "GADTs", "KindSignatures", "TypeOperators" ]) ]
     imports = [ ImportDecl src (ModuleName "GHC.TypeLits") False False False Nothing Nothing Nothing
@@ -173,5 +173,4 @@ style = PP.Style PP.PageMode 132 0.6
 myMode :: PP.PPHsMode
 myMode = PP.PPHsMode 2 2 2 2 2 4 1 True PP.PPOffsideRule False 
 
-prettyPrint o = PP.prettyPrintStyleMode style myMode (createModule o)
-
+prettyPrint mod o = PP.prettyPrintStyleMode style myMode (createModule mod o)
